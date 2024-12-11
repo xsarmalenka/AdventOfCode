@@ -1,109 +1,63 @@
-def get_guide_pos(lines):
-    guide_pos = "[]"
-    for i in range(len(lines)):
-        for j in range(len(lines[i])):
-            if not "#" in lines[i][j] and not "." in lines[i][j] and not "X" in lines[i][j]:
-                guide_pos = "[" + str(i) + "," + str(j) + "]"
-                break
-    return guide_pos
+def pretty_print(map):
+    for m in map:
+        print(m)
 
-def get_char_map(lines, row, column):
-    return lines[row][column]
+def get_position(map, char):
+    for i, row in enumerate(map):
+        for j, clm in enumerate(row):
+            if clm in char:
+                return (i, j)
+    return None
 
-def set_map(lines, row, column, char):
-    map = [[0 for i in range(len(lines))] for j in range(len(lines[0]))]
-    for i in range(len(lines)):
-        for j in range(len(lines[i])):
-            if i == row and j == column:
-                map[i][j] = char
-            else: 
-                map[i][j] = lines[i][j]
-    return map
+def go_out(map, guard_position, visited):
+    x = guard_position[0]
+    y = guard_position[1]
+    guard_char = map[x][y]
+    stop = False
 
-def get_pos_row(lines):
-    pos = get_guide_pos(lines)
-    pos_row = int(pos.split(",")[0].replace("[", ""))
-    return pos_row
+    while not stop:
+        if not (x, y) in visited: visited.add((x, y))
 
-def get_pos_column(lines):
-    pos = get_guide_pos(lines)
-    pos_column = int(pos.split(",")[1].replace("]", ""))
-    return pos_column
+        if guard_char == "^": direct = (-1, 0)
+        elif guard_char == ">": direct = (0, 1)
+        elif guard_char == "<": direct = (0, -1)
+        elif guard_char == "v": direct = (1, 0)
 
-def move(lines):
-    map = lines
-    position_row = get_pos_row(lines)
-    position_column = get_pos_column(lines)
-    char = get_char_map(lines, position_row, position_column)
+        dx = direct[0]
+        dy = direct[1]
+        nx, ny = x + dx, y + dy
 
-    if char == "^" and position_row > 0:
-        if get_char_map(map, position_row-1, position_column) != "#":
-            #print("jdu nahoru")
-            map = set_map(map, position_row, position_column, "X")
-            map = set_map(map, position_row-1, position_column, "^")
-        else:
-            #print("nahore je prekazka")
-            map = set_map(map, position_row, position_column, "X")
-            map = set_map(map, position_row, position_column+1, ">")
-    elif char == ">" and position_column < len(lines[0]):
-        if get_char_map(map, position_row, position_column+1) != "#":
-            #print("jdu doprava")
-            map = set_map(map, position_row, position_column, "X")
-            map = set_map(map, position_row, position_column+1, ">")
-        else: 
-            #print("vpravo je prekazka")
-            map = set_map(map, position_row, position_column, "X")
-            map = set_map(map, position_row+1, position_column, "v")
-    elif char == "v" and position_row < len(lines):
-            if get_char_map(map, position_row+1, position_column) != "#":
-                #print("jdu dolu")
-                map = set_map(map, position_row, position_column, "X")
-                map = set_map(map, position_row+1, position_column, "v")
-            else: 
-                #print("dole je prekazka")
-                map = set_map(map, position_row, position_column, "X")
-                map = set_map(map, position_row, position_column-1, "<")
-    elif char == "<" and position_column > 0:
-        if get_char_map(map, position_row, position_column-1) != "#":
-            #print("jdu doleva")
-            map = set_map(map, position_row, position_column, "X")
-            map = set_map(map, position_row, position_column-1, "<")
-        else: 
-            #print("vlevo je prekazka")
-            map = set_map(map, position_row, position_column, "X")
-            map = set_map(map, position_row-1, position_column, "^")
-    return map 
+        if nx == len(map) and guard_char == "v": stop = True
+        if nx == 0-1 and guard_char == "^": stop = True
+        if ny == len(map) and guard_char == ">": stop = True
+        if ny == 0-1 and guard_char == "<": stop = True
 
-def finish(lines):
-    finish = False
-    row = get_pos_row(lines)
-    column = get_pos_column(lines)
-    guide_char = get_char_map(lines, row, column)
-    if guide_char == "^" and row == 0:
-        finish = True
-    elif guide_char == "v" and row == len(lines)-1:
-        finish = True
-    elif guide_char == ">" and column == len(lines[0])-1:
-        finish = True
-    elif guide_char == "<:" and column == 0:
-        finish = True
+        if not stop:
+            if map[nx][ny] != "#":   
+                x = nx
+                y = ny
+            else: # change direct
+                if guard_char == "^": guard_char = ">"
+                elif guard_char == ">": guard_char = "v"
+                elif guard_char == "<": guard_char = "^"
+                elif guard_char == "v": guard_char = "<"
 
-    return finish
+    return visited
 
-with open('input.txt', 'r') as file:
-    input_map = file.read()
-map_lines = input_map.split("\n")
+def move(input):
+    map = list(input.split("\n")) 
 
-while finish(map_lines) == False:
-    map_lines = move(map_lines)
+    guard_pos = get_position(map, {"<", ">", "v", "^"})
+    visited = set()
+    visited = go_out(map, guard_pos, visited)
+    return len(visited)
 
-# secti X
-result = 0 
-for i in range(len(map_lines)):
-    for j in range(len(map_lines[0])):
-        char = get_char_map(map_lines, i, j)
-        if char == "X":
-            result += 1
+#file_name = 'test_input2.txt'
+# file_name = 'test_input.txt'
+file_name = 'input.txt'
 
-print("RESULT: " + str(result+1))
+with open(file_name, 'r') as file:
+    input = file.read()
 
+result = move(input)
+print("\nRESULT: " + str(result))

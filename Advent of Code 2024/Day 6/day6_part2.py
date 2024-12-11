@@ -1,216 +1,136 @@
-def get_guide_pos(lines):
-    for i, row in enumerate(lines):
-        for j, char in enumerate(row):
-            if char in {"^", "v", ">", "<"}: 
-                return i, j
-    return None 
+from collections import Counter
 
-def get_guide_char(lines):
-    pos = get_guide_pos(lines)
-    if pos is not None:
-        return lines[pos[0]][pos[1]]
-    return None 
+def pretty_print(map):
+    for m in map:
+        print(m)
 
-def move(lines):
-    position = get_guide_pos(lines)
-    if position is None: return lines
-    
-    position_row, position_column = position
-    char = lines[position_row][position_column]
-    new_lines = [list(row) for row in lines] 
-    new_lines[position_row][position_column] = "X"
+def get_position(map, char):
+    for i, row in enumerate(map):
+        for j, clm in enumerate(row):
+            if clm in char:
+                return (i, j)
+    return None
 
-    if char == "^" and position_row > 0:
-        next_char = lines[position_row - 1][position_column]
-        if next_char != "#": new_lines[position_row - 1][position_column] = "^"
-        else: new_lines[position_row][position_column + 1] = ">"
-    elif char == ">" and position_column < len(lines[0]) - 1:
-        next_char = lines[position_row][position_column + 1]
-        if next_char != "#": new_lines[position_row][position_column + 1] = ">"
-        else: new_lines[position_row + 1][position_column] = "v"
-    elif char == "v" and position_row < len(lines) - 1:
-        next_char = lines[position_row + 1][position_column]
-        if next_char != "#": new_lines[position_row + 1][position_column] = "v"
-        else: new_lines[position_row][position_column - 1] = "<"
-    elif char == "<" and position_column > 0:
-        next_char = lines[position_row][position_column - 1]
-        if next_char != "#": new_lines[position_row][position_column - 1] = "<"
-        else: new_lines[position_row - 1][position_column] = "^"
+def go_out(map, guard_position, visited):
+    x = guard_position[0]
+    y = guard_position[1]
+    guard_char = map[x][y]
+    stop = False
 
-    return ["".join(row) for row in new_lines]
+    while not stop:
+        if not (x, y) in visited: 
+            if not (x, y) == (guard_position[0], guard_position[1]):
+                visited.add((x, y))
 
-def finish(lines):
-    position = get_guide_pos(lines)
-    if position is None: return True
-    position_row, position_column = position
-    guide_char = lines[position_row][position_column]
-    return (
-        (guide_char == "^" and position_row == 0) or
-        (guide_char == "v" and position_row == len(lines) - 1) or
-        (guide_char == ">" and position_column == len(lines[0]) - 1) or
-        (guide_char == "<" and position_column == 0)
-    )
+        if guard_char == "^": direct = (-1, 0)
+        elif guard_char == ">": direct = (0, 1)
+        elif guard_char == "<": direct = (0, -1)
+        elif guard_char == "v": direct = (1, 0)
 
-def simulate_guard_path(input_map):
-    map_lines = input_map.strip().split("\n")
-    while not finish(map_lines):
-        map_lines = move(map_lines)
+        dx = direct[0]
+        dy = direct[1]
+        nx, ny = x + dx, y + dy
 
-    position = get_guide_pos(map_lines)
-    if position is not None:
-        position_row, position_column = position
-        map_lines[position_row] = map_lines[position_row][:position_column] + "X" + map_lines[position_row][position_column + 1:]
+        if nx == len(map) and guard_char == "v": stop = True
+        if nx == 0-1 and guard_char == "^": stop = True
+        if ny == len(map) and guard_char == ">": stop = True
+        if ny == 0-1 and guard_char == "<": stop = True
 
-    return map_lines
+        if not stop:
+            if map[nx][ny] != "#":   
+                x = nx
+                y = ny
+            else: # change direct
+                if guard_char == "^": guard_char = ">"
+                elif guard_char == ">": guard_char = "v"
+                elif guard_char == "<": guard_char = "^"
+                elif guard_char == "v": guard_char = "<"
 
-def simulate_guard(input_map, obstruction_row, obstruction_column):
-    map_lines = [list(row) for row in input_map.split("\n")]
+    return visited
 
-    guide_pos = get_guide_pos(map_lines)
-    if not(guide_pos == (obstruction_row, obstruction_column)):
-        map_lines[obstruction_row][obstruction_column] = "0"
-    
-    visited_positions = set()
-    loop_detected = False
-    road = False
+def move(input):
+    map = list(input.split("\n")) 
+    guard_pos = get_position(map, {"<", ">", "v", "^"})
+    visited = set()
+    visited = go_out(map, guard_pos, visited)
+    return visited
 
-    while True:
-        position_row, position_column = get_guide_pos(map_lines)
-        current_char = map_lines[position_row][position_column]
-        if current_char == ">" and position_column == len(map_lines[0])-1: break
-        elif current_char == "v" and position_row == len(map_lines)-1: break
-        elif current_char == "^" and position_row == 0: break
-        elif current_char == "<" and position_column== 0: break
+def go(map, guard_position, trace):
+    x = guard_position[0]
+    y = guard_position[1]
+    guard_char = map[x][y]
+    stop = False
+    trace_counter = Counter()
+    loop = 0
+    is_loop = False
 
-        if current_char in {"^", "v"}: visit = "|"
-        elif current_char in {"<", ">"}: visit = "-"
-        else: visit = current_char
+    plus_trace_counter = Counter()
+    plus_trace = set()
 
-        if road:
-            map_lines[position_row][position_column] = "+"
-            road = False
-        else: map_lines[position_row][position_column] = visit
+    while not stop: 
+        if guard_char == "^": direct = (-1, 0)
+        elif guard_char == ">": direct = (0, 1)
+        elif guard_char == "<": direct = (0, -1)
+        elif guard_char == "v": direct = (1, 0)
+
+        if trace_counter[(x,y)] >= 2:
+            plus_trace.add((x,y))
+            plus_trace_counter[(x,y)] += 1
+
+        if plus_trace_counter[(x,y)] >= 2:
+            loop += 1
         
-        # Pohyb strážce
-        if current_char == "^" and position_row > 0:
-            next_char = map_lines[position_row - 1][position_column]
-            if next_char == "#" or next_char == "0":
-                next_next_char = map_lines[position_row][position_column+1]
-                if next_next_char == "0":
-                    loop_detected = False
-                    break
-                else:
-                    road = True
-                    map_lines[position_row][position_column] = ">"
-            elif next_char == "-":
-                road = True
-                map_lines[position_row - 1][position_column] = "^"
-            elif next_char == "+":
-                next_next_char = map_lines[position_row - 2][position_column]
-                if next_next_char == ".":
-                    map_lines[position_row][position_column - 1] = "^"
-                else:
-                    loop_detected = True
-                    break
-            else:
-                map_lines[position_row - 1][position_column] = "^"
-        elif current_char == "v" and position_row < len(map_lines) - 1:
-            next_char = map_lines[position_row + 1][position_column]
-            if next_char == "#" or next_char == "0":
-                next_next_char = map_lines[position_row][position_column-1]
-                if next_next_char == "0":
-                    loop_detected = False
-                    break
-                else:
-                    road = True
-                    map_lines[position_row][position_column] = "<"
-            elif next_char == "+":
-                next_next_char = map_lines[position_row + 2][position_column]
-                if next_next_char == ".":
-                    map_lines[position_row][position_column - 1] = "v"
-                else:
-                    loop_detected = True
-                    break
-            elif next_char == "-":
-                map_lines[position_row + 1][position_column] = "v"
-            else:
-                map_lines[position_row + 1][position_column] = "v"
-        elif current_char == "<" and position_column > 0:
-            next_char = map_lines[position_row][position_column - 1]
-            if next_char == "#" or next_char == "0":
-                next_next_char = map_lines[position_row-1][position_column]
-                if next_next_char == "0":
-                    loop_detected = False
-                    break
-                else:
-                    road = True
-                    map_lines[position_row][position_column] = "^"
-            elif next_char == "|":
-                road = True
-                map_lines[position_row][position_column - 1] = "<"
-            elif next_char == "+":
-                next_next_char = map_lines[position_row][position_column - 2]
-                if next_next_char == ".":
-                    map_lines[position_row][position_column - 1] = "<"
-                else:
-                    loop_detected = True
-                    break
-            else:
-                map_lines[position_row][position_column - 1] = "<"
-        elif current_char == ">" and position_column < len(map_lines[0]) - 1:
-            next_char = map_lines[position_row][position_column + 1]
-            if next_char == "#" or next_char == "0":
-                next_next_char = map_lines[position_row+1][position_column]
-                if next_next_char == "0":
-                    loop_detected = False
-                    break
-                else:
-                    road = True
-                    map_lines[position_row][position_column] = "v"
-            elif next_char == "|":
-                road = True
-                map_lines[position_row][position_column + 1] = ">"
-            elif next_char == "+":
-                next_next_char = map_lines[position_row][position_column + 2]
-                if next_next_char == ".":
-                    map_lines[position_row][position_column + 1] = ">"
-                else:
-                    loop_detected = True
-                    break
-            else:
-                map_lines[position_row][position_column + 1] = ">"
+        if loop == 2:
+            is_loop = True
+            stop = True
 
-        if loop_detected: 
-            break
+        trace.add((x, y))
+        trace_counter[(x,y)] += 1
 
-        #if obstruction_row == 5 and obstruction_column == 6:
-        #    for m in map_lines:
-        #        print(m)
+        dx = direct[0]
+        dy = direct[1]
+        nx, ny = x + dx, y + dy
 
-    map_lines = ["".join(row) for row in map_lines]
-    return loop_detected
+        if nx == len(map) and guard_char == "v": stop = True
+        if nx == -1 and guard_char == "^": stop = True
+        if ny == len(map) and guard_char == ">": stop = True
+        if ny == -1 and guard_char == "<": stop = True
 
+        if not stop:
+            if map[nx][ny] != "#":   
+                x = nx
+                y = ny
+            else: # change direct
+                if guard_char == "^": guard_char = ">"
+                elif guard_char == ">": guard_char = "v"
+                elif guard_char == "<": guard_char = "^"
+                elif guard_char == "v": guard_char = "<"
 
-def find_obstruction_positions(input_map):
-    map_with_path = simulate_guard_path(input_map)
-    #print("MAP WITH PATH:")
-    #print("\n".join(map_with_path))
+    return is_loop
 
-    guide_path = [
-        (i, j) for i, row in enumerate(map_with_path) for j, char in enumerate(row) if char == "X"
-    ]
+def find_loop(input, visited):
+    #for visit in visited:
+    count = 0
+    for i, visit in enumerate(visited):
+        #if i == 0: # test
+        print(str(visit) + " I: " + str(i) + "/" + str(len(visited)))
+        map = [list(line) for line in input.split("\n")]
+        map[visit[0]][visit[1]]= "#"
+        guard_pos = get_position(map, {"<", ">", "v", "^"})
+        trace = set()
+        loop = go(map, guard_pos, trace)
+        #pretty_print(map)
 
-    result_counter = 0
-    for row, column in guide_path:
-        if simulate_guard(input_map, row, column): 
-            result_counter += 1
-            print(f"Loop detected at {row}, {column}") 
+        if loop: 
+            count += 1
+    return count
 
-    return result_counter
+#file_name = 'test_input.txt'
+file_name = 'input.txt'
 
-# Main code
-with open('input.txt', 'r') as file:
-    input_map = file.read()
+with open(file_name, 'r') as file:
+    input = file.read()
 
-result = find_obstruction_positions(input_map)
-print("RESULT:", result)
+visited = move(input)
+result = find_loop(input, visited)
+print("\nRESULT: " + str(result))
